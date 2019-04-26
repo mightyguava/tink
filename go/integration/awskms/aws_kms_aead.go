@@ -50,11 +50,13 @@ func NewAWSAEAD(keyURI string, kms *kms.KMS) *AWSAEAD {
 
 // Encrypt AEAD encrypts the plaintext data and uses addtionaldata from authentication.
 func (a *AWSAEAD) Encrypt(plaintext, additionalData []byte) ([]byte, error) {
-	ad := base64.StdEncoding.EncodeToString(additionalData)
 	req := &kms.EncryptInput{
-		KeyId:             aws.String(a.keyURI),
-		Plaintext:         plaintext,
-		EncryptionContext: map[string]*string{"additionalData": &ad},
+		KeyId:     aws.String(a.keyURI),
+		Plaintext: plaintext,
+	}
+	if len(additionalData) > 0 {
+		ad := base64.StdEncoding.EncodeToString(additionalData)
+		req.EncryptionContext = map[string]*string{"additionalData": &ad}
 	}
 	resp, err := a.kms.Encrypt(req)
 	if err != nil {
@@ -66,17 +68,19 @@ func (a *AWSAEAD) Encrypt(plaintext, additionalData []byte) ([]byte, error) {
 
 // Decrypt AEAD decrypts the data and verified the additional data.
 func (a *AWSAEAD) Decrypt(ciphertext, additionalData []byte) ([]byte, error) {
-	ad := base64.StdEncoding.EncodeToString(additionalData)
 	req := &kms.DecryptInput{
-		CiphertextBlob:    ciphertext,
-		EncryptionContext: map[string]*string{"additionalData": &ad},
+		CiphertextBlob: ciphertext,
+	}
+	if len(additionalData) > 0 {
+		ad := base64.StdEncoding.EncodeToString(additionalData)
+		req.EncryptionContext = map[string]*string{"additionalData": &ad}
 	}
 	resp, err := a.kms.Decrypt(req)
-	if strings.Compare(*resp.KeyId, a.keyURI) != 0 {
-		return nil, errors.New("decryption failed: wrong key id")
-	}
 	if err != nil {
 		return nil, err
+	}
+	if strings.Compare(*resp.KeyId, a.keyURI) != 0 {
+		return nil, errors.New("decryption failed: wrong key id")
 	}
 	return resp.Plaintext, nil
 }
